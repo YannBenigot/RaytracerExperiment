@@ -9,8 +9,12 @@ data Light = Light {lightPosition :: Vector3, lightLuminosity :: Color} deriving
 
 data Scene = Scene {objects :: [Object], sceneLight :: Light, ambientLight :: Color}
 
-rayObjectColor :: Scene -> Object -> Vector3 -> Vector3 -> Int -> Color
+render :: Scene -> Camera -> Float -> Float -> IO ()
+cameraCoordToAbsolute :: Camera -> Vector3 -> Vector3
 rayColor :: Scene -> Vector3 -> Vector3 -> Color
+rayObjectColor :: Scene -> Object -> Vector3 -> Vector3 -> Int -> Color
+nearestIntersection :: Scene -> Vector3 -> Vector3 -> Maybe (Object, Vector3)
+lightAttenuation :: Float -> Float
 
 nearestIntersection scene point ray =
 	let getNearest bestInter newInter = case (bestInter, newInter) of
@@ -26,7 +30,7 @@ nearestIntersection scene point ray =
 		Nothing
 		(map (\o -> (o, intersects o point ray)) (objects scene))
 
-lightAttenuation dist = 1.0
+lightAttenuation dist = 1.0 -- Not used by reflection
 
 clamp :: Float -> Float
 clamp x = max (min x 1.0) 0.0
@@ -34,7 +38,7 @@ clampColor :: Color -> Color
 clampColor (Color (r,g,b)) = Color (clamp r, clamp g, clamp b)
 
 rayObjectColor scene object point incidentRay recursionLevel =
-	let s = surface object in
+	let m = material object in
 	let n = normal object point in
 	-- Reflection
 	let reflectionColor =
@@ -49,11 +53,27 @@ rayObjectColor scene object point incidentRay recursionLevel =
 	in
 	-- Diffusion
 	let diffusionColor light =
-		let newRayVec = (lightPosition light) -. point in
-		let newRay = normalize newRayVec in
-		let factor = max ((newRay |. n)) 0 in
-		let dist = norm newRayVec in
-		let intersection = nearestIntersection scene point newRay in
+		let toLightVec = (lightPosition light) -. point in
+		let toLight = normalize toLightVec in
+		let factor = max ((toLight |. n)) 0 in
+		let dist = norm toLightVec in
+		let intersection = nearestIntersection scene point toLight in
+		case intersection of
+			Just (_, _) -> Color (0,0,0)
+			Nothing -> 
+				let Color (r, g, b) = lightLuminosity light in
+				let f = factor / (lightAttenuation dist) in
+				Color (r*f, g*f, b*f)
+	in
+	-- Specular
+	let specularColor light =
+		let toLightVec = (lightPosition light) -. point in
+		let toLight = normalize toLightVec in
+		let normalComponent = (toLight |. n) in
+		let reflectedLight = ((2 * normalComponent) *. n) -. toLight in
+		let factor = (max (-(reflectedLight |. incidentRay)) 0) ** 6 in
+		let dist = norm toLightVec in
+		let intersection = nearestIntersection scene point toLight in
 		case intersection of
 			Just (_, _) -> Color (0,0,0)
 			Nothing -> 
@@ -62,11 +82,13 @@ rayObjectColor scene object point incidentRay recursionLevel =
 				Color (r*f, g*f, b*f)
 	in
 	let dc = diffusionColor $ sceneLight scene in
-	let r = reflection s; d = diffusion s; Color (red, blue, green) = color s in
+	let sc = specularColor $ sceneLight scene in
+	let r = reflection m; d = diffusion m; s = specular m; Color (red, blue, green) = color m in
 	let Color (rr, rg, rb) = reflectionColor in
 	let Color (dr, dg, db) = dc in
+	let Color (sr, sg, sb) = sc in
 	let Color (ar, ag, ab) = ambientLight scene in
-	clampColor $ Color (red * (r * rr + d * dr + ar), green * (r * rg + d * dg + ag), blue * (r * rb + d * db + ab))
+	clampColor $ Color (red * (s * sr + r * rr + d * dr + ar), green * (s * sg + r * rg + d * dg + ag), blue * (s * sb + r * rb + d * db + ab))
 
 
 rayColor scene point incidentRay =
@@ -74,10 +96,8 @@ rayColor scene point incidentRay =
 		Just (object, newPoint) -> rayObjectColor scene object newPoint incidentRay 0
 		Nothing -> Color (0,0,0)
 
-cameraCoordToAbsolute :: Camera -> Vector3 -> Vector3
 cameraCoordToAbsolute camera v = (mult (cameraMatrix camera) v) +. (cameraPosition camera)
 
-render :: Scene -> Camera -> Float -> Float -> IO ()
 render scene camera width height =
 	let projRectWidth = 2 * (cameraDist camera) * (tan ((cameraFovX camera)/2)) in
 	let projRectHeight = 2 * (cameraDist camera) * (tan ((cameraFovY camera)/2)) in

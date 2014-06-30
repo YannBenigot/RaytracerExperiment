@@ -5,7 +5,7 @@ import Algebra
 class (Show a) => ObjectClass a where
 	intersects :: a -> Vector3 -> Vector3 -> Maybe Vector3
 	normal :: a -> Vector3 -> Vector3
-	surface :: a -> Surface
+	material :: a -> Material
 
 data Object = forall a. ObjectClass a => Object a
 
@@ -15,11 +15,11 @@ instance Show Object where
 instance ObjectClass Object where
 	intersects (Object a) o d = intersects a o d
 	normal (Object a) p = normal a p
-	surface (Object a) = surface a
+	material (Object a) = material a
 
 newtype Color = Color (Float, Float, Float) deriving(Show)
-data Surface = Surface {reflection :: Float, transmission :: Float, diffusion :: Float, color :: Color} deriving(Show)
-data Sphere = Sphere {sphereCenter :: Vector3, sphereRadius :: Float, sphereSurface :: Surface} deriving(Show)
+data Material = Material {reflection :: Float, transmission :: Float, diffusion :: Float, specular :: Float, color :: Color} deriving(Show)
+data Sphere = Sphere {sphereCenter :: Vector3, sphereRadius :: Float, sphereMaterial :: Material} deriving(Show)
 
 instance ObjectClass Sphere where
 	intersects s origin direction =
@@ -37,4 +37,4 @@ instance ObjectClass Sphere where
 		else
 			Nothing
 	normal s point = normalize (point -. (sphereCenter s))
-	surface s = sphereSurface s
+	material s = sphereMaterial s
