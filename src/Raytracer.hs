@@ -2,6 +2,7 @@ module Raytracer where
 import System.IO
 import Algebra
 import Objects
+import Debug.Trace
 
 data Camera = Camera {cameraPosition :: Vector3, cameraMatrix :: Matrix3, cameraFovX :: Float, cameraFovY :: Float, cameraDist :: Float}
 
@@ -9,7 +10,7 @@ data Light = Light {lightPosition :: Vector3, lightLuminosity :: Color} deriving
 
 data Scene = Scene {objects :: [Object], sceneLight :: Light, ambientLight :: Color}
 
-render :: Scene -> Camera -> Float -> Float -> IO ()
+render :: Scene -> Camera -> Int -> Int -> IO ()
 cameraCoordToAbsolute :: Camera -> Vector3 -> Vector3
 rayColor :: Scene -> Vector3 -> Vector3 -> Color
 rayObjectColor :: Scene -> Object -> Vector3 -> Vector3 -> Int -> Color
@@ -98,10 +99,14 @@ rayColor scene point incidentRay =
 
 cameraCoordToAbsolute camera v = (mult (cameraMatrix camera) v) +. (cameraPosition camera)
 
+i2f :: Int -> Float
+i2f i = fromIntegral i
+
 render scene camera width height =
 	let projRectWidth = 2 * (cameraDist camera) * (tan ((cameraFovX camera)/2)) in
 	let projRectHeight = 2 * (cameraDist camera) * (tan ((cameraFovY camera)/2)) in
-	let cPoints = [Vector3 (projRectWidth * (x / width - 0.5), projRectHeight * (y / height - 0.5), cameraDist camera) | y <- (reverse [0..(width-1)]), x <- (reverse [0..(height-1)])] in
+	let fwidth = i2f width; fheight = i2f height in
+	let cPoints = [Vector3 (projRectWidth * ((i2f x) / fwidth - 0.5), projRectHeight * ((i2f y) / fheight - 0.5), cameraDist camera) | y <- (reverse [0..(height-1)]), x <- (reverse [0..(width-1)])] in
 	let rayOfCPoint cPoint = normalize ((cameraCoordToAbsolute camera cPoint) -. (cameraPosition camera)) in
 	let pointOfCPoint cPoint = cameraCoordToAbsolute camera cPoint in
 	let stringOfColor (Color (r,g,b)) =
@@ -110,7 +115,7 @@ render scene camera width height =
 	let stringOfCPoint = stringOfColor . (\cPoint -> rayColor scene (pointOfCPoint cPoint) (rayOfCPoint cPoint)) in
 	do
 		file <- openFile "manger3.ppm" WriteMode
-		result <- hPutStr file ("P3 " ++ (show $ round width) ++ " " ++ (show $ round height) ++ " 255 ")
+		result <- hPutStr file ("P3 " ++ (show width) ++ " " ++ (show height) ++ " 255 ")
 		mapM_ (\p -> hPutStr file $ stringOfCPoint p) cPoints
 		hClose file
 		return ()

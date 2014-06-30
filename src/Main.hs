@@ -11,4 +11,4 @@ cam = Camera (Vector3 (0.0, 0.0, -5.0)) (Matrix3 (Vector3 (1.0, 0.0, 0.0), Vecto
 scene = Scene [Object s1, Object s2, Object s3] l (Color (0.1, 0.1, 0.1))
 
 main :: IO ()
-main = do render scene cam 600 600
+main = do render scene cam 1366 768
