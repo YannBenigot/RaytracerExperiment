@@ -36,3 +36,7 @@ instance Vector Vector3 where
 		(*.) a (Vector3 (x,y,z)) = Vector3 (a*x, a*y, a*z)
 		(/.) (Vector3 (x,y,z)) a = Vector3 (x/a, y/a, z/a)
 		neutral = Vector3 (0,0,0)
+
+(^.) :: Vector3 -> Vector3 -> Vector3
+(^.) (Vector3 (xa, ya, za)) (Vector3 (xb, yb, zb)) =
+	Vector3 (ya*zb-za*yb, xb*za-xa*zb, xa*yb-xb*ya)

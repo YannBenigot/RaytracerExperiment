@@ -2,13 +2,12 @@ module Raytracer where
 import System.IO
 import Algebra
 import Objects
-import Debug.Trace
 
-data Camera = Camera {cameraPosition :: Vector3, cameraMatrix :: Matrix3, cameraFovX :: Float, cameraFovY :: Float, cameraDist :: Float}
+data Camera = Camera {cameraPosition :: Vector3, cameraMatrix :: Matrix3, cameraFovX :: Float, cameraFovY :: Float, cameraDist :: Float} deriving(Show)
 
 data Light = Light {lightPosition :: Vector3, lightLuminosity :: Color} deriving(Show)
 
-data Scene = Scene {objects :: [Object], sceneLight :: Light, ambientLight :: Color}
+data Scene = Scene {objects :: [Object], sceneLight :: Light, ambientLight :: Color} deriving(Show)
 
 render :: Scene -> Camera -> Int -> Int -> IO ()
 cameraCoordToAbsolute :: Camera -> Vector3 -> Vector3
@@ -16,8 +15,15 @@ rayColor :: Scene -> Vector3 -> Vector3 -> Color
 rayObjectColor :: Scene -> Object -> Vector3 -> Vector3 -> Int -> Color
 nearestIntersection :: Scene -> Vector3 -> Vector3 -> Maybe (Object, Vector3)
 lightAttenuation :: Float -> Float
+bitFurther :: Vector3 -> Vector3 -> Vector3
+
+epsilon = 0.01
+bitFurther point direction = point +. (epsilon *. direction)
 
 nearestIntersection scene point ray =
+	let Vector3(x,y,z) = point in
+	--trace (if z > 10.0 then ((show point) ++ (show ray))  else "") $
+	--trace (if z > 10.0 then undefined else "") $
 	let getNearest bestInter newInter = case (bestInter, newInter) of
 		((Just (o1, inter1)), (o2, Just inter2)) -> 
 			let n1 = norm2(point-.inter1); n2 = norm2(point-.inter2) in
@@ -31,7 +37,7 @@ nearestIntersection scene point ray =
 		Nothing
 		(map (\o -> (o, intersects o point ray)) (objects scene))
 
-lightAttenuation dist = 1.0 -- Not used by reflection
+lightAttenuation dist = 1.0 -- dist * dist / 30.0 -- Not used by reflection
 
 clamp :: Float -> Float
 clamp x = max (min x 1.0) 0.0
@@ -43,39 +49,46 @@ rayObjectColor scene object point incidentRay recursionLevel =
 	let n = normal object point in
 	-- Reflection
 	let reflectionColor =
+		if reflection m == 0.0 then Color (0,0,0) else
 		if recursionLevel == 6 then Color (0,0,0) else
 			let normalComponent = (incidentRay |. n) *. n in
 			let tangentComponent = incidentRay -. normalComponent in
 			let newRay = tangentComponent -. normalComponent in
-			let intersection = nearestIntersection scene point newRay in
+			let intersection = nearestIntersection scene (bitFurther point newRay) newRay in
 			case intersection of
 				Just (newObject, newPoint) -> rayObjectColor scene newObject newPoint newRay (recursionLevel+1)
 				Nothing -> Color (0,0,0)
 	in
 	-- Diffusion
 	let diffusionColor light =
+		if diffusion m == 0.0 then Color (0,0,0) else
 		let toLightVec = (lightPosition light) -. point in
 		let toLight = normalize toLightVec in
 		let factor = max ((toLight |. n)) 0 in
 		let dist = norm toLightVec in
-		let intersection = nearestIntersection scene point toLight in
+		let intersection = nearestIntersection scene (bitFurther point toLight) toLight in
+		let Vector3(x,y,z) = point in
+		--trace (if (abs (z-10.0))<0.1 && y >= 5.0 then (show point) ++ (show intersection) else "") $
+		let resColor = 
+			let Color (r, g, b) = lightLuminosity light in
+			let f = factor / (lightAttenuation dist) in
+			Color (r*f, g*f, b*f) in
 		case intersection of
-			Just (_, _) -> Color (0,0,0)
-			Nothing -> 
-				let Color (r, g, b) = lightLuminosity light in
-				let f = factor / (lightAttenuation dist) in
-				Color (r*f, g*f, b*f)
+			Just (_, p) -> if norm(p-.point) < dist then Color(0,0,0) else resColor
+			Nothing -> resColor
+				
 	in
 	-- Specular
 	let specularColor light =
+		if specular m == 0.0 then Color (0,0,0) else
 		let toLightVec = (lightPosition light) -. point in
 		let toLight = normalize toLightVec in
 		let normalComponent = (toLight |. n) in
 		let reflectedLight = ((2 * normalComponent) *. n) -. toLight in
 		let factor = (max (-(reflectedLight |. incidentRay)) 0) ** 6 in
 		let dist = norm toLightVec in
-		let intersection = nearestIntersection scene point toLight in
-		case intersection of
+		let intersection = nearestIntersection scene (bitFurther point toLight) toLight in
+		case intersection of -- TODO: fix same as diffusion
 			Just (_, _) -> Color (0,0,0)
 			Nothing -> 
 				let Color (r, g, b) = lightLuminosity light in
@@ -84,7 +97,7 @@ rayObjectColor scene object point incidentRay recursionLevel =
 	in
 	let dc = diffusionColor $ sceneLight scene in
 	let sc = specularColor $ sceneLight scene in
-	let r = reflection m; d = diffusion m; s = specular m; Color (red, blue, green) = color m in
+	let r = reflection m; d = diffusion m; s = specular m; Color (red, green, blue) = color m in
 	let Color (rr, rg, rb) = reflectionColor in
 	let Color (dr, dg, db) = dc in
 	let Color (sr, sg, sb) = sc in
