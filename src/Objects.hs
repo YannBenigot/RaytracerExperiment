@@ -18,7 +18,7 @@ instance ObjectClass Object where
 	material (Object a) = material a
 
 newtype Color = Color (Float, Float, Float) deriving(Show)
-data Material = Material {reflection :: Float, transmission :: Float, diffusion :: Float, specular :: Float, color :: Color} deriving(Show)
+data Material = Material {ambient :: Float, reflection :: Float, transmission :: Float, diffusion :: Float, specular :: Float, refractiveIndex :: Float, color :: Color} deriving(Show)
 data Sphere = Sphere {sphereCenter :: Vector3, sphereRadius :: Float, sphereMaterial :: Material} deriving(Show)
 data Triangle = Triangle {triangleOrigin :: Vector3, triangleUa :: Vector3, triangleUb :: Vector3, triangleUc :: Vector3, triangleA :: Float, triangleB :: Float, triangleC :: Float, triangleNormal :: Vector3, triangleMaterial :: Material} deriving(Show)
 data Plane = Plane {planeOrigin :: Vector3, planeNormal :: Vector3, planeMaterial :: Material} deriving(Show)
@@ -30,16 +30,15 @@ makeTriangle a b c m =
 instance ObjectClass Sphere where
 	intersects s origin direction =
 		let k = direction |. (((sphereCenter s)) -. origin) in
-		if k >= 0
+		let distance2 = norm2 (origin +. (k *. direction) -. (sphereCenter s)) in
+		if distance2 < (sphereRadius s) * (sphereRadius s)
 		then
-			let distance2 = norm2 (origin +. (k *. direction) -. (sphereCenter s)) in
-			if distance2 < (sphereRadius s) * (sphereRadius s)
-			then
-				let nearestToInterDist = sqrt ((sphereRadius s) ** 2 - distance2) in
-				let l1 = k - nearestToInterDist; l2 = k - nearestToInterDist in
-				Just (origin +. ((minabs l1 l2) *. direction))
-			else
-				Nothing
+			let nearestToInterDist = sqrt ((sphereRadius s) ** 2 - distance2) in
+			let l1 = k - nearestToInterDist; l2 = k + nearestToInterDist in
+			let ml = minpos l1 l2 in
+			case ml of
+				Just l -> Just (origin +. (l *. direction))
+				Nothing -> Nothing
 		else
 			Nothing
 	normal s point = normalize (point -. (sphereCenter s))

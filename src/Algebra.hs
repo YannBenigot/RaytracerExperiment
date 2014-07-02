@@ -26,6 +26,13 @@ normalize v = v /. (norm v)
 minabs :: Float -> Float -> Float
 minabs x y = if abs(x) > abs(y) then y else x
 
+minpos :: Float -> Float -> Maybe Float
+minpos x y = 
+	if x >= 0 && y >= 0 then Just $ min x y else 
+		if x < 0 && y < 0 then Nothing else 
+			if x >= 0 && y < 0 then Just x else 
+				Just y
+
 mult :: Matrix3 -> Vector3 -> Vector3
 mult (Matrix3 (a, b, c)) (Vector3 (x,y,z)) = (x *. a) +. (y *. b) +. (z *. c)
 
